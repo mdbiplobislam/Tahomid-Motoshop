@@ -1,0 +1,6 @@
+{
+  "name": "Tahomid Motoshop Accounts & Inventory",
+  "description": "Comprehensive motorcycle spare parts inventory, POS billing, workshop service job cards, and accounting software for Tahomid Motoshop, Netrokona, Bangladesh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

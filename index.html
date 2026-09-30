@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tahomid Motoshop - Accounts &amp; Inventory Software</title>
+    <meta name="description" content="Complete Motorcycle Spare Parts Inventory, POS Billing, Workshop Job Cards, and Digital Accounts Ledger for Tahomid Motoshop, Netrokona, Bangladesh." />
+    <meta property="og:title" content="Tahomid Motoshop - Accounts &amp; Inventory Software" />
+    <meta property="og:description" content="Complete Motorcycle Spare Parts Inventory, POS Billing, Workshop Job Cards, and Digital Accounts Ledger for Tahomid Motoshop, Netrokona, Bangladesh." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        #printable-invoice, #printable-invoice * {
+          visibility: visible;
+        }
+        #printable-invoice {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          background: white !important;
+          color: black !important;
+        }
+        .no-print {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-neutral-900 text-neutral-100 antialiased font-sans selection:bg-amber-500 selection:text-neutral-950">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
