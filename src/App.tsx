@@ -10,6 +10,7 @@ import {
   DuePaymentRecord,
   Mechanic,
   ShopSettings,
+  UserAccount,
 } from './types';
 import { AppStorage } from './utils/storage';
 import { TopNav, NavTab } from './components/TopNav';
@@ -21,7 +22,9 @@ import { CashbookAccounts } from './components/CashbookAccounts';
 import { DirectoryView } from './components/DirectoryView';
 import { PrintInvoiceModal } from './components/PrintInvoiceModal';
 import { ShopSettingsModal } from './components/ShopSettingsModal';
-import { formatBDT } from './utils/formatters';
+import { LoginView } from './components/LoginView';
+import { CustomerPortal } from './components/CustomerPortal';
+import { formatBDT, generateJobNumber } from './utils/formatters';
 import {
   MapPin,
   Phone,
@@ -34,6 +37,14 @@ import {
 } from 'lucide-react';
 
 export default function App() {
+  // Authentication & Users State
+  const [users, setUsers] = useState<UserAccount[]>(() => AppStorage.getUsers());
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    const saved = AppStorage.getCurrentUser();
+    // Default to Super Admin if none saved so the shop is instantly ready, or users can switch anytime
+    return saved || AppStorage.getUsers()[0] || null;
+  });
+
   // Navigation State
   const [activeTab, setActiveTab] = useState<NavTab>('pos');
 
@@ -65,6 +76,14 @@ export default function App() {
   } | null>(null);
 
   // Sync state changes to localStorage
+  useEffect(() => {
+    AppStorage.saveUsers(users);
+  }, [users]);
+
+  useEffect(() => {
+    AppStorage.saveCurrentUser(currentUser);
+  }, [currentUser]);
+
   useEffect(() => {
     AppStorage.saveParts(parts);
   }, [parts]);
@@ -106,16 +125,35 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2') {
         e.preventDefault();
-        setActiveTab('pos');
+        if (currentUser?.role !== 'customer') {
+          setActiveTab('pos');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [currentUser]);
+
+  // Handle Authentication
+  const handleLoginSuccess = (user: UserAccount) => {
+    setCurrentUser(user);
+    if (user.role === 'customer') {
+      // Customer lands on their portal
+    } else {
+      setActiveTab('pos');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    AppStorage.saveCurrentUser(null);
+  };
 
   // Quick summary counts
   const lowStockCount = parts.filter((p) => p.stockQuantity <= p.minStockAlert).length;
-  const pendingJobsCount = jobCards.filter((j) => j.status === 'In Progress' || j.status === 'Pending').length;
+  const pendingJobsCount = jobCards.filter(
+    (j) => j.status === 'In Progress' || j.status === 'Pending'
+  ).length;
 
   // POS Sale Completion Handler
   const handleCompleteSale = (
@@ -175,6 +213,42 @@ export default function App() {
     setActiveTab('pos');
   };
 
+  // Customer portal appointment booking
+  const handleCustomerRequestServicing = (problemDesc: string) => {
+    if (!currentUser) return;
+    const custProfile = customers.find((c) => c.id === currentUser.customerId);
+
+    const newJob: JobCard = {
+      id: `job-${Date.now()}`,
+      jobCardNumber: generateJobNumber(Math.floor(100 + Math.random() * 900)),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      customerName: custProfile?.name || currentUser.name,
+      customerPhone: custProfile?.phone || currentUser.phone,
+      bikeModel: custProfile?.bikeModel || 'Motorcycle (Customer App)',
+      bikeRegNo: custProfile?.bikeRegNo || 'Netrokona-HA 11-4589',
+      currentOdoKm: 15000,
+      assignedMechanicId: mechanics[0]?.id || 'mech-1',
+      assignedMechanicName: mechanics[0]?.name || 'Master Uzzal',
+      customerReportedIssues: [problemDesc],
+      diagnosticNotes: 'Online booking via Rider Self-Service Portal. Pending shop inspection.',
+      plannedServices: [
+        {
+          serviceName: 'General Inspection & Servicing',
+          charge: 350,
+          done: false,
+        },
+      ],
+      partsUsed: [],
+      status: 'Pending',
+      estimatedCompletionTime: 'Awaiting Ramp Check',
+      totalLaborCharge: 350,
+      totalPartsCharge: 0,
+    };
+
+    setJobCards((prev) => [newJob, ...prev]);
+  };
+
   // Stock-In Handler
   const handleStockIn = (
     record: any,
@@ -231,12 +305,25 @@ export default function App() {
     setDuePayments(AppStorage.getDuePayments());
     setMechanics(AppStorage.getMechanics());
     setSettings(AppStorage.getSettings());
+    setUsers(AppStorage.getUsers());
   };
 
   const handleResetData = () => {
     AppStorage.resetAllToDefault();
     handleReloadData();
+    setCurrentUser(AppStorage.getUsers()[0]);
   };
+
+  // If user is logged out, render the Login Screen
+  if (!currentUser) {
+    return (
+      <LoginView
+        users={users}
+        settings={settings}
+        onLoginSuccess={handleLoginSuccess}
+      />
+    );
+  }
 
   // Calculate today's quick business health snapshot
   const todayStart = new Date();
@@ -247,19 +334,33 @@ export default function App() {
   const todaySales = todayInvoices.reduce((acc, i) => acc + i.grandTotal, 0);
   const totalDueReceivable = customers.reduce((acc, c) => acc + c.totalDue, 0);
 
+  // Check if current user is customer
+  const isCustomer = currentUser.role === 'customer';
+  const customerProfile = isCustomer
+    ? customers.find(
+        (c) =>
+          c.id === currentUser.customerId ||
+          c.phone.includes(currentUser.phone) ||
+          c.name.toLowerCase().includes(currentUser.name.toLowerCase())
+      )
+    : undefined;
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col selection:bg-amber-400 selection:text-neutral-950">
-      {/* 1. Strict Top Bar Contract */}
+      {/* 1. Strict Top Bar Contract with User Authentication Badge */}
       <TopNav
         activeTab={activeTab}
+        currentUser={currentUser}
         onSelectTab={setActiveTab}
         onOpenSettings={() => setIsSettingsModalOpen(true)}
         onQuickNewSale={() => setActiveTab('pos')}
+        onLogout={handleLogout}
+        onSwitchUser={() => setCurrentUser(null)}
         lowStockCount={lowStockCount}
         pendingJobsCount={pendingJobsCount}
       />
 
-      {/* 2. Quiet Domain Context Strip (Location & Trust Indicators) */}
+      {/* 2. Domain Context Strip */}
       <div className="border-b border-neutral-850 bg-neutral-900/60 no-print">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-3 text-neutral-400">
@@ -279,122 +380,148 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4 text-xs font-mono">
-            <div className="flex items-center gap-1.5">
-              <span className="text-neutral-500 font-sans">Today's Sales:</span>
-              <span className="font-bold text-amber-400 tabular-nums">
-                {formatBDT(todaySales)}
-              </span>
-            </div>
-            <span aria-hidden="true" className="text-neutral-700">|</span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-neutral-500 font-sans">Customer Baki:</span>
-              <span className="font-bold text-rose-400 tabular-nums">
-                {formatBDT(totalDueReceivable)}
-              </span>
-            </div>
+            {!isCustomer ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-neutral-500 font-sans">Today's Sales:</span>
+                  <span className="font-bold text-amber-400 tabular-nums">
+                    {formatBDT(todaySales)}
+                  </span>
+                </div>
+                <span aria-hidden="true" className="text-neutral-700">|</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-neutral-500 font-sans">Customer Baki:</span>
+                  <span className="font-bold text-rose-400 tabular-nums">
+                    {formatBDT(totalDueReceivable)}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-neutral-300 font-sans">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>Logged in as Rider: <strong className="text-amber-400">{currentUser.name}</strong></span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* 3. Main Workspace Viewport */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-        {activeTab === 'pos' && (
-          <PosBilling
-            parts={parts}
-            services={services}
-            customers={customers}
-            mechanics={mechanics}
-            settings={settings}
-            onCompleteSale={handleCompleteSale}
-            initialJobCardData={jobCardForBilling}
-            onClearInitialJobCard={() => setJobCardForBilling(null)}
-          />
-        )}
-
-        {activeTab === 'inventory' && (
-          <InventoryManager
-            parts={parts}
-            suppliers={suppliers}
-            onSavePart={(newPart) => {
-              setParts((prev) => {
-                const idx = prev.findIndex((p) => p.id === newPart.id);
-                if (idx >= 0) {
-                  return prev.map((p) => (p.id === newPart.id ? newPart : p));
-                } else {
-                  return [newPart, ...prev];
-                }
-              });
-            }}
-            onDeletePart={(partId) => {
-              setParts((prev) => prev.filter((p) => p.id !== partId));
-            }}
-            onStockIn={handleStockIn}
-            onQuickAdjustStock={handleQuickAdjustStock}
-          />
-        )}
-
-        {activeTab === 'workshop' && (
-          <WorkshopManager
-            jobCards={jobCards}
-            services={services}
-            mechanics={mechanics}
-            parts={parts}
-            onSaveJobCard={(card) => setJobCards((prev) => [card, ...prev])}
-            onUpdateJobCard={(card) =>
-              setJobCards((prev) => prev.map((j) => (j.id === card.id ? card : j)))
-            }
-            onBillJobCardInPOS={handleBillJobCardInPOS}
-          />
-        )}
-
-        {activeTab === 'baki' && (
-          <BakiKhata
-            customers={customers}
-            suppliers={suppliers}
-            duePayments={duePayments}
-            settings={settings}
-            onRecordPayment={handleRecordDuePayment}
-          />
-        )}
-
-        {activeTab === 'cashbook' && (
-          <CashbookAccounts
+        {/* CUSTOMER PORTAL VIEW */}
+        {isCustomer ? (
+          <CustomerPortal
+            currentUser={currentUser}
+            customer={customerProfile}
             invoices={invoices}
-            expenses={expenses}
-            duePayments={duePayments}
+            jobCards={jobCards}
             settings={settings}
-            onAddExpense={(exp) => setExpenses((prev) => [exp, ...prev])}
-            onDeleteExpense={(id) => setExpenses((prev) => prev.filter((e) => e.id !== id))}
+            onViewInvoice={(inv) => setActiveInvoiceForPrint(inv)}
+            onRequestServicing={handleCustomerRequestServicing}
+            onLogout={handleLogout}
           />
-        )}
+        ) : (
+          /* ADMIN & STAFF DASHBOARDS */
+          <>
+            {activeTab === 'pos' && (
+              <PosBilling
+                parts={parts}
+                services={services}
+                customers={customers}
+                mechanics={mechanics}
+                settings={settings}
+                onCompleteSale={handleCompleteSale}
+                initialJobCardData={jobCardForBilling}
+                onClearInitialJobCard={() => setJobCardForBilling(null)}
+              />
+            )}
 
-        {activeTab === 'directory' && (
-          <DirectoryView
-            customers={customers}
-            suppliers={suppliers}
-            onSaveCustomer={(cust) => {
-              setCustomers((prev) => {
-                const idx = prev.findIndex((c) => c.id === cust.id);
-                if (idx >= 0) {
-                  return prev.map((c) => (c.id === cust.id ? cust : c));
-                } else {
-                  return [cust, ...prev];
+            {activeTab === 'inventory' && (
+              <InventoryManager
+                parts={parts}
+                suppliers={suppliers}
+                onSavePart={(newPart) => {
+                  setParts((prev) => {
+                    const idx = prev.findIndex((p) => p.id === newPart.id);
+                    if (idx >= 0) {
+                      return prev.map((p) => (p.id === newPart.id ? newPart : p));
+                    } else {
+                      return [newPart, ...prev];
+                    }
+                  });
+                }}
+                onDeletePart={(partId) => {
+                  setParts((prev) => prev.filter((p) => p.id !== partId));
+                }}
+                onStockIn={handleStockIn}
+                onQuickAdjustStock={handleQuickAdjustStock}
+              />
+            )}
+
+            {activeTab === 'workshop' && (
+              <WorkshopManager
+                jobCards={jobCards}
+                services={services}
+                mechanics={mechanics}
+                parts={parts}
+                onSaveJobCard={(card) => setJobCards((prev) => [card, ...prev])}
+                onUpdateJobCard={(card) =>
+                  setJobCards((prev) => prev.map((j) => (j.id === card.id ? card : j)))
                 }
-              });
-            }}
-            onSaveSupplier={(sup) => {
-              setSuppliers((prev) => {
-                const idx = prev.findIndex((s) => s.id === sup.id);
-                if (idx >= 0) {
-                  return prev.map((s) => (s.id === sup.id ? sup : s));
-                } else {
-                  return [sup, ...prev];
-                }
-              });
-            }}
-            onDeleteCustomer={(id) => setCustomers((prev) => prev.filter((c) => c.id !== id))}
-            onDeleteSupplier={(id) => setSuppliers((prev) => prev.filter((s) => s.id !== id))}
-          />
+                onBillJobCardInPOS={handleBillJobCardInPOS}
+              />
+            )}
+
+            {activeTab === 'baki' && (
+              <BakiKhata
+                customers={customers}
+                suppliers={suppliers}
+                duePayments={duePayments}
+                settings={settings}
+                onRecordPayment={handleRecordDuePayment}
+              />
+            )}
+
+            {activeTab === 'cashbook' && (
+              <CashbookAccounts
+                invoices={invoices}
+                expenses={expenses}
+                duePayments={duePayments}
+                settings={settings}
+                onAddExpense={(exp) => setExpenses((prev) => [exp, ...prev])}
+                onDeleteExpense={(id) => setExpenses((prev) => prev.filter((e) => e.id !== id))}
+              />
+            )}
+
+            {activeTab === 'directory' && (
+              <DirectoryView
+                customers={customers}
+                suppliers={suppliers}
+                onSaveCustomer={(cust) => {
+                  setCustomers((prev) => {
+                    const idx = prev.findIndex((c) => c.id === cust.id);
+                    if (idx >= 0) {
+                      return prev.map((c) => (c.id === cust.id ? cust : c));
+                    } else {
+                      return [cust, ...prev];
+                    }
+                  });
+                }}
+                onSaveSupplier={(sup) => {
+                  setSuppliers((prev) => {
+                    const idx = prev.findIndex((s) => s.id === sup.id);
+                    if (idx >= 0) {
+                      return prev.map((s) => (s.id === sup.id ? sup : s));
+                    } else {
+                      return [sup, ...prev];
+                    }
+                  });
+                }}
+                onDeleteCustomer={(id) => setCustomers((prev) => prev.filter((c) => c.id !== id))}
+                onDeleteSupplier={(id) => setSuppliers((prev) => prev.filter((s) => s.id !== id))}
+              />
+            )}
+          </>
         )}
       </main>
 
@@ -408,28 +535,43 @@ export default function App() {
       )}
 
       {/* 5. Shop Settings & Database Backup Modal */}
-      {isSettingsModalOpen && (
+      {isSettingsModalOpen && currentUser && (
         <ShopSettingsModal
           settings={settings}
           mechanics={mechanics}
+          users={users}
+          currentUser={currentUser}
           onSaveSettings={setSettings}
           onSaveMechanics={setMechanics}
+          onSaveUsers={setUsers}
           onResetData={handleResetData}
           onRestoreData={handleReloadData}
           onClose={() => setIsSettingsModalOpen(false)}
         />
       )}
 
-      {/* Quiet Footer */}
+      {/* Footer */}
       <footer className="border-t border-neutral-900 bg-neutral-950 py-4 text-center text-xs text-neutral-500 no-print">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div>
             <span>{settings.shopName}</span>
             <span aria-hidden="true" className="mx-2">·</span>
             <span>Netrokona, Bangladesh</span>
+            {currentUser && (
+              <>
+                <span aria-hidden="true" className="mx-2">·</span>
+                <span className="text-neutral-400 capitalize">
+                  Active Role: <strong>{currentUser.role.replace('_', ' ')}</strong>
+                </span>
+              </>
+            )}
           </div>
           <div>
-            <span>Press <kbd className="px-1.5 py-0.5 bg-neutral-900 border border-neutral-800 rounded font-mono text-[10px] text-neutral-300">F2</kbd> for New Sale</span>
+            {!isCustomer && (
+              <span>
+                Press <kbd className="px-1.5 py-0.5 bg-neutral-900 border border-neutral-800 rounded font-mono text-[10px] text-neutral-300">F2</kbd> for New Sale
+              </span>
+            )}
           </div>
         </div>
       </footer>

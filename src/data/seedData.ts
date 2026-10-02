@@ -942,3 +942,48 @@ export const initialDuePayments: DuePaymentRecord[] = [
     notes: 'Paid against Bajaj genuine parts weekly chalan.',
   },
 ];
+
+export const initialUsers: import('../types').UserAccount[] = [
+  {
+    id: 'usr-1',
+    username: 'superadmin',
+    name: 'Tahomid (Proprietor)',
+    phone: '01712-894523',
+    password: 'password123',
+    role: 'super_admin',
+    createdAt: '2026-01-01T00:00:00Z',
+    active: true,
+  },
+  {
+    id: 'usr-2',
+    username: 'admin',
+    name: 'Biplob Islam (Manager)',
+    phone: '01918-347291',
+    password: 'password123',
+    role: 'admin',
+    createdAt: '2026-02-01T00:00:00Z',
+    active: true,
+  },
+  {
+    id: 'usr-3',
+    username: 'salesman',
+    name: 'Zahidul Hasan (Counter Sales)',
+    phone: '01733-556677',
+    password: 'password123',
+    role: 'salesman',
+    createdAt: '2026-03-01T00:00:00Z',
+    active: true,
+  },
+  {
+    id: 'usr-4',
+    username: 'customer',
+    name: 'Kamrul Hasan (Rider)',
+    phone: '01711-234567',
+    password: 'password123',
+    role: 'customer',
+    customerId: 'cust-1',
+    createdAt: '2026-07-12T00:00:00Z',
+    active: true,
+  },
+];
+

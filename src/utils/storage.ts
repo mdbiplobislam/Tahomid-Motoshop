@@ -9,6 +9,7 @@ import {
   DuePaymentRecord,
   Mechanic,
   ShopSettings,
+  UserAccount,
 } from '../types';
 import {
   initialParts,
@@ -21,6 +22,7 @@ import {
   initialDuePayments,
   initialMechanics,
   initialShopSettings,
+  initialUsers,
 } from '../data/seedData';
 
 const STORAGE_KEYS = {
@@ -34,6 +36,8 @@ const STORAGE_KEYS = {
   DUE_PAYMENTS: 'tms_due_payments_v1',
   MECHANICS: 'tms_mechanics_v1',
   SETTINGS: 'tms_settings_v1',
+  USERS: 'tms_users_v1',
+  CURRENT_USER: 'tms_current_user_v1',
 };
 
 function getOrInit<T>(key: string, defaultValue: T): T {
@@ -89,6 +93,26 @@ export const AppStorage = {
   getSettings: (): ShopSettings => getOrInit(STORAGE_KEYS.SETTINGS, initialShopSettings),
   saveSettings: (items: ShopSettings) => setItem(STORAGE_KEYS.SETTINGS, items),
 
+  getUsers: (): UserAccount[] => getOrInit(STORAGE_KEYS.USERS, initialUsers),
+  saveUsers: (items: UserAccount[]) => setItem(STORAGE_KEYS.USERS, items),
+
+  getCurrentUser: (): UserAccount | null => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+  saveCurrentUser: (user: UserAccount | null) => {
+    if (!user) {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    } else {
+      setItem(STORAGE_KEYS.CURRENT_USER, user);
+    }
+  },
+
   resetAllToDefault: () => {
     localStorage.removeItem(STORAGE_KEYS.PARTS);
     localStorage.removeItem(STORAGE_KEYS.SERVICES);
@@ -100,6 +124,8 @@ export const AppStorage = {
     localStorage.removeItem(STORAGE_KEYS.DUE_PAYMENTS);
     localStorage.removeItem(STORAGE_KEYS.MECHANICS);
     localStorage.removeItem(STORAGE_KEYS.SETTINGS);
+    localStorage.removeItem(STORAGE_KEYS.USERS);
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
   },
 
   exportFullBackup: (): string => {

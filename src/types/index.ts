@@ -222,3 +222,18 @@ export interface ShopSettings {
   receiptFormat: 'Thermal80mm' | 'StandardA4';
   currencySymbol: string;
 }
+
+export type UserRole = 'super_admin' | 'admin' | 'salesman' | 'customer';
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  name: string;
+  phone: string;
+  password: string;
+  role: UserRole;
+  customerId?: string;
+  createdAt: string;
+  lastLogin?: string;
+  active: boolean;
+}

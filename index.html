@@ -2,6 +2,36 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Safeguard against environments where window.fetch has only a getter
+      (function() {
+        try {
+          var _fetch = window.fetch ? window.fetch.bind(window) : undefined;
+          Object.defineProperty(window, 'fetch', {
+            get: function() {
+              return _fetch;
+            },
+            set: function(fn) {
+              _fetch = fn;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          try {
+            var proto = Object.getPrototypeOf(window) || Window.prototype;
+            var desc = Object.getOwnPropertyDescriptor(proto, 'fetch');
+            var orig = (desc && desc.get) ? desc.get.call(window) : window.fetch;
+            Object.defineProperty(proto, 'fetch', {
+              get: function() { return this._customFetch || orig; },
+              set: function(fn) { this._customFetch = fn; },
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e2) {}
+        }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tahomid Motoshop - Accounts &amp; Inventory Software</title>
     <meta name="description" content="Complete Motorcycle Spare Parts Inventory, POS Billing, Workshop Job Cards, and Digital Accounts Ledger for Tahomid Motoshop, Netrokona, Bangladesh." />
